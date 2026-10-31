@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Yokai Crawler</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect fill='%23070910' width='32' height='32'/%3E%3Cpath fill='%23e23d32' d='M6 8h20v3H6zm2 3h3v14H8zm13 0h3v14h-3zM5 7h22v2H5z'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="css/game.css" />
+</head>
+<body>
+  <canvas id="view" tabindex="0" aria-label="Yokai Crawler view"></canvas>
+  <div id="vignette"></div>
+
+  <div id="title">
+    <div class="card">
+      <p class="eyebrow">NIGHT ROAD</p>
+      <h1>Yokai Crawler</h1>
+      <span class="kanji">妖怪路</span>
+      <p class="lede">Two exorcists, one cedar road, and every spirit between the shrine and the oni gate. Walk it alone, or share a road code.</p>
+      <div class="actions" id="menu-actions">
+        <button class="primary" id="btn-solo" type="button">Walk alone</button>
+        <button class="ghost" id="btn-host" type="button">Host a road</button>
+        <button class="ghost" id="btn-join" type="button">Join with a code</button>
+      </div>
+      <div id="host-panel" hidden>
+        <div id="room-code" aria-live="polite">····</div>
+        <span id="share-link"></span>
+        <div class="actions">
+          <button class="ghost" id="btn-copy" type="button">Copy share link</button>
+          <button class="primary" id="btn-begin" type="button" disabled>Begin the road</button>
+        </div>
+      </div>
+      <div id="join-form" hidden>
+        <input id="code-input" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Road code" placeholder="CODE" />
+        <button class="primary" id="btn-connect" type="button">Enter the road</button>
+      </div>
+      <p id="net-status" role="status"></p>
+      <p class="controls">
+        <b>WASD</b> move · <b>mouse</b> aim · <b>J</b> / click katana · <b>hold K</b> / right-click ofuda · <b>Shift</b> dash · <b>Space</b> seal · <b>Q</b> kunai · <b>F</b> elixir · <b>E</b> rest or lift a companion · <b>Esc</b> pause · <b>M</b> mute
+      </p>
+    </div>
+  </div>
+
+  <div id="game" hidden>
+    <div id="room-hud"></div>
+    <div id="quest"></div>
+    <div id="bossbar" hidden>
+      <div id="boss-name">Gate Oni</div>
+      <div class="track"><i id="boss-fill"></i></div>
+    </div>
+    <div id="toast"></div>
+    <div id="prompt"></div>
+    <div id="tags"></div>
+    <div id="floaters"></div>
+    <div id="combo-wrap"><b id="combo">0</b><small>CHAIN</small></div>
+    <div id="vitals">
+      <div class="row">
+        <div class="elixir" title="Elixirs" aria-label="Elixirs"><span id="elixir-n">3</span></div>
+        <div class="mon">金 <span id="koban">0</span></div>
+      </div>
+      <div class="bar hp" title="Vitality"><i id="hp-fill"></i><span id="hp-label">100/100</span></div>
+      <div class="bar sp" title="Spirit"><i id="sp-fill"></i><span id="sp-label">100/100</span></div>
+    </div>
+    <div id="hint">J slash · hold K ofuda · Shift dash · Space seal · Q kunai · F elixir · E shrine</div>
+    <div id="touch" hidden>
+      <div id="stick" aria-hidden="true"><div id="knob"></div></div>
+      <div id="tbtn">
+        <button type="button" data-a="slash">斬</button>
+        <button type="button" data-a="beam">符</button>
+        <button type="button" data-a="dash">駆</button>
+        <button type="button" data-a="burst">封</button>
+        <button type="button" data-a="heal">癒</button>
+      </div>
+    </div>
+    <div id="pause" hidden>
+      <div class="sheet">
+        <h2>The road is still</h2>
+        <p>Yokai wait where you left them.</p>
+        <button class="primary" id="btn-resume" type="button">Continue</button>
+        <button class="ghost" id="btn-quit" type="button">Leave</button>
+      </div>
+    </div>
+    <div id="victory" hidden>
+      <div class="sheet">
+        <h2>The gate is still</h2>
+        <p id="victory-sub">Dawn will come.</p>
+        <button class="primary" id="btn-again" type="button">Walk the road again</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="vendor/three.min.js"></script>
+  <script src="vendor/peerjs.min.js"></script>
+  <script src="js/level.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/net.js"></script>
+  <script src="js/sim.js"></script>
+  <script src="js/render.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

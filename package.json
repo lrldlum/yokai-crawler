@@ -1,0 +1,12 @@
+{
+  "name": "yokai-crawler",
+  "private": true,
+  "description": "A co-op night road of shrines and yokai. Static site; no build step.",
+  "scripts": {
+    "start": "python3 -m http.server 4173",
+    "test:coop": "playwright test test/coop.spec.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0"
+  }
+}
