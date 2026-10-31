@@ -4,6 +4,8 @@ A browser action game on a night road in feudal Japan. Kaede (and, if you share 
 
 It is a static site. Open `index.html`, or play it at <https://lrldlum.github.io/yokai-crawler/>. Nothing is installed to play.
 
+Publishing is the Pages workflow on `main` (`.github/workflows/pages.yml`). The first time, the repository has to allow that: Settings → Pages → Build and deployment → Source: **GitHub Actions**. After that, every push to `main` deploys. Re-run the "Deploy Pages" workflow if the first attempt ran before Pages was turned on.
+
 The road is original fiction. It is not affiliated with any other game, and it does not use anyone else's art or names.
 
 ## Play
