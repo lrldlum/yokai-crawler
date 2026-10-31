@@ -30,7 +30,7 @@ Fight in bursts. Walk the lanterns between them. Shrines refill vitality, spirit
 
 ## Play together
 
-The host simulates the whole road. The other player only sends what they press, and the host sends the world back. Signalling uses the public PeerJS broker; the game itself is peer to peer. Strict networks without a working peer connection can fail, the same way any WebRTC page can. There is no account and no server to join.
+The host simulates the whole road. The other player only sends what they press, and the host sends the world back. Signalling uses the public PeerJS broker; the game itself is peer to peer. Google STUN is tried first, then public TURN relays (Open Relay, then turn.evan-brass.net) if the browsers cannot reach each other directly. A join waits about 35 seconds and tries once more before it reports a failure. Add `?relay=1` to force the relay path. There is no account and no server to join.
 
 1. One person chooses **Host a road**.
 2. A four-character code appears, with a link.
