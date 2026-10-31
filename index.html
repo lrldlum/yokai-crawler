@@ -54,12 +54,16 @@
     <div id="floaters"></div>
     <div id="combo-wrap"><b id="combo">0</b><small>CHAIN</small></div>
     <div id="vitals">
-      <div class="row">
-        <div class="elixir" title="Elixirs" aria-label="Elixirs"><span id="elixir-n">3</span></div>
-        <div class="mon">金 <span id="koban">0</span></div>
+      <div class="hud-cluster">
+        <div class="elixir-col">
+          <div class="elixir" title="Elixirs" aria-label="Elixirs"><span id="elixir-n">3</span></div>
+          <div class="mon"><span id="koban">0</span></div>
+        </div>
+        <div class="bars">
+          <div class="bar hp" title="Vitality"><i id="hp-fill"></i><span id="hp-label">100/100</span></div>
+          <div class="bar sp" title="Spirit"><i id="sp-fill"></i><span id="sp-label">100/100</span></div>
+        </div>
       </div>
-      <div class="bar hp" title="Vitality"><i id="hp-fill"></i><span id="hp-label">100/100</span></div>
-      <div class="bar sp" title="Spirit"><i id="sp-fill"></i><span id="sp-label">100/100</span></div>
     </div>
     <div id="hint">J slash · hold K ofuda · Shift dash · Space seal · Q kunai · F elixir · E shrine</div>
     <div id="touch" hidden>
@@ -95,6 +99,7 @@
   <script src="js/audio.js"></script>
   <script src="js/net.js"></script>
   <script src="js/sim.js"></script>
+  <script src="js/sprites.js"></script>
   <script src="js/render.js"></script>
   <script src="js/main.js"></script>
 </body>

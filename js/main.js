@@ -196,6 +196,7 @@
       const p = lastSnap.players[i];
       const pr = renderer.project(p.x, p.y, 2.05);
       if (!pr.on) continue;
+      if (p.id === localId()) continue;
       const cls = p.id === 1 ? 'p1' : 'p2';
       html += '<div class="tag ' + cls + '" style="left:' + pr.x + 'px;top:' + pr.y + 'px">' + p.name + (p.dead ? ' · fallen' : '') + '</div>';
     }
