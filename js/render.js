@@ -121,6 +121,9 @@
           gc = 26 + n * 14;
           b = 24 + n * 12;
         }
+        const n3 = hash(px * 13 + 1, py * 9 + 4);
+        if (!wet && n3 > 0.972) { r = 96 + n * 24; gc = 92 + n * 18; b = 84 + n * 12; }
+        else if (!wet && !center && n3 < 0.035) { r = Math.min(255, r + 28); gc = Math.min(255, gc + 36); b = Math.min(255, b + 6); }
         const i = (py * w + px) * 4;
         data[i] = r;
         data[i + 1] = gc;
@@ -304,53 +307,271 @@
     r.render(this.quadScene, this.quadCam);
   };
 
-  Renderer.prototype._dress = function () {
-    const c = document.createElement('canvas');
-    c.width = c.height = 32;
-    const g = c.getContext('2d');
-    for (let i = 0; i < 48; i++) {
-      const x = 4 + Math.random() * 24;
-      const y = 2 + Math.random() * 26;
-      g.fillStyle = Math.random() > 0.86 ? '#e2ec78' : (Math.random() > 0.5 ? '#2f6a52' : '#1a4038');
-      g.fillRect(x, y, 2, 2);
-    }
-    const tex = new THREE.CanvasTexture(c);
-    tex.magFilter = THREE.NearestFilter;
-    tex.minFilter = THREE.NearestFilter;
-    tex.colorSpace = THREE.SRGBColorSpace;
-    for (let i = 0; i < 110; i++) {
-      const y = Math.random() * 206;
-      const seg = Level.segmentAt(y);
-      const x = seg.x0 + 0.8 + Math.random() * Math.max(0.4, seg.x1 - seg.x0 - 1.6);
-      if (Math.abs(x) < 1.15) continue;
-      const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
-      s.center.set(0.5, 0);
-      const sc = 1.1 + Math.random() * 1.1;
-      s.scale.set(sc * 1.6, sc * 1.15, 1);
-      s.position.set(x, 0.02, y);
-      this.scene.add(s);
-    }
-    this._house(-5.4, 11);
-    this._house(5.6, 19.5);
+  Renderer.prototype._rand = function (i) {
+    let n = Math.imul(i ^ 0x9e3779b9, 0x85ebca6b);
+    n = (n ^ (n >>> 13)) >>> 0;
+    return n / 4294967295;
   };
 
-  Renderer.prototype._house = function (x, z) {
+  Renderer.prototype._verge = function (i, bias) {
+    const y = -2 + this._rand(i + 20) * 208;
+    const seg = Level.segmentAt(y);
+    const side = this._rand(i + 3) > 0.5 ? 1 : -1;
+    const inset = 0.35 + this._rand(i + 9) * (bias || 1.8);
+    let x = side > 0 ? seg.x1 - inset : seg.x0 + inset;
+    if (Math.abs(x) < 1.7) x = side * Math.max(1.9, Math.abs(x));
+    return { x: x, y: y, seg: seg };
+  };
+
+  Renderer.prototype._stamp = function (mesh, i, x, y, z, sx, sy, sz, rot) {
+    this._dummy = this._dummy || new THREE.Object3D();
+    const d = this._dummy;
+    d.position.set(x, y, z);
+    d.scale.set(sx, sy, sz);
+    d.rotation.set(0, rot || 0, 0);
+    d.updateMatrix();
+    mesh.setMatrixAt(i, d.matrix);
+  };
+
+  Renderer.prototype._dress = function () {
+    const scene = this.scene;
+    const R = this._rand.bind(this);
+    const grass = new THREE.InstancedMesh(
+      new THREE.ConeGeometry(0.28, 0.95, 4),
+      new THREE.MeshLambertMaterial({ color: 0x3d8a56, flatShading: true, emissive: 0x143824, emissiveIntensity: 0.55 }),
+      900
+    );
+    const flowers = new THREE.InstancedMesh(
+      new THREE.ConeGeometry(0.07, 0.28, 3),
+      new THREE.MeshLambertMaterial({ color: 0xc6d25a, emissive: 0x6a7020, emissiveIntensity: 0.4 }),
+      180
+    );
+    const bamboo = new THREE.InstancedMesh(
+      new THREE.CylinderGeometry(0.035, 0.05, 2.15, 5),
+      new THREE.MeshLambertMaterial({ color: 0x7ea84a, emissive: 0x243818, emissiveIntensity: 0.25 }),
+      260
+    );
+    const leaves = new THREE.InstancedMesh(
+      new THREE.ConeGeometry(0.16, 0.42, 4),
+      new THREE.MeshLambertMaterial({ color: 0xb6d86a, flatShading: true }),
+      260
+    );
+    const trunks = new THREE.InstancedMesh(
+      new THREE.CylinderGeometry(0.1, 0.16, 1.15, 5),
+      new THREE.MeshLambertMaterial({ color: 0x3a2a1c }),
+      56
+    );
+    const canopy = new THREE.InstancedMesh(
+      new THREE.ConeGeometry(0.95, 1.7, 6),
+      new THREE.MeshLambertMaterial({ color: 0x2a7a48, flatShading: true, emissive: 0x12341c, emissiveIntensity: 0.45 }),
+      56
+    );
+    const canopy2 = new THREE.InstancedMesh(
+      new THREE.ConeGeometry(0.62, 1.15, 6),
+      new THREE.MeshLambertMaterial({ color: 0x2a7044, flatShading: true }),
+      56
+    );
+    const rocks = new THREE.InstancedMesh(
+      new THREE.DodecahedronGeometry(0.42, 0),
+      new THREE.MeshLambertMaterial({ color: 0x5c6470, flatShading: true }),
+      48
+    );
+    const posts = new THREE.InstancedMesh(
+      new THREE.BoxGeometry(0.08, 0.72, 0.08),
+      new THREE.MeshLambertMaterial({ color: 0x4a3424 }),
+      96
+    );
+    let gi = 0, fi = 0, bi = 0, ci = 0, ri = 0, pi = 0;
+    for (let i = 0; i < 420; i++) {
+      const y = (i % 210) * 1.0;
+      const seg = Level.segmentAt(y);
+      const side = i < 210 ? -1 : 1;
+      const inset = 1.55 + (i % 5) * 0.28;
+      const x = side > 0 ? seg.x1 - inset : seg.x0 + inset;
+      if (Math.abs(x) < 1.45) continue;
+      const s = 0.85 + (i % 4) * 0.28;
+      this._stamp(grass, gi++, x, 0.42 * s, y, s, s, s, i);
+    }
+    for (let i = 0; i < 480; i++) {
+      const p = this._verge(i, 2.4);
+      if (Math.abs(p.x) < 1.5) continue;
+      const s = 0.7 + R(i + 40) * 1.15;
+      this._stamp(grass, gi++, p.x, 0.4 * s, p.y, s, s, s, R(i) * 3);
+    }
+    grass.count = gi;
+    for (let i = 0; i < 180; i++) {
+      const p = this._verge(i + 800, 2.4);
+      if (Math.abs(p.x) < 1.7) continue;
+      this._stamp(flowers, fi++, p.x, 0.2, p.y, 1, 0.7 + R(i) * 0.8, 1, 0);
+    }
+    flowers.count = fi;
+    for (let i = 0; i < 260; i++) {
+      const grove = R(i + 4) > 0.45;
+      const y = grove ? 59 + R(i + 11) * 26 : R(i + 15) * 200;
+      const seg = Level.segmentAt(y);
+      const side = R(i + 6) > 0.5 ? 1 : -1;
+      const x = side > 0 ? seg.x1 - (0.25 + R(i + 8) * 1.1) : seg.x0 + (0.25 + R(i + 8) * 1.1);
+      if (Math.abs(x) < 1.8) continue;
+      const h = 0.75 + R(i + 2) * 0.7;
+      this._stamp(bamboo, bi, x, 1.05 * h, y, 1, h, 1, 0);
+      this._stamp(leaves, bi, x, 2.05 * h, y, 1, 1, 1, R(i) * 2);
+      bi++;
+    }
+    bamboo.count = leaves.count = bi;
+    for (let i = 0; i < 56; i++) {
+      const p = this._verge(i + 200, 1.3);
+      if (Math.abs(p.x) < 2.1) continue;
+      const s = 1.05 + R(i + 70) * 1.15;
+      this._stamp(trunks, ci, p.x, 0.55 * s, p.y, s, s, s, 0);
+      this._stamp(canopy, ci, p.x, 1.55 * s, p.y, s, s, s, R(i));
+      this._stamp(canopy2, ci, p.x, 2.25 * s, p.y, s * 0.85, s, s * 0.85, 0);
+      ci++;
+    }
+    trunks.count = canopy.count = canopy2.count = ci;
+    for (let i = 0; i < 48; i++) {
+      const p = this._verge(i + 400, 1.6);
+      if (Math.abs(p.x) < 2.0) continue;
+      const s = 0.45 + R(i + 5) * 1.1;
+      this._stamp(rocks, ri++, p.x, 0.22 * s, p.y, s, s * (0.6 + R(i)), s, R(i) * 4);
+    }
+    rocks.count = ri;
+    for (let i = 0; i < 48; i++) {
+      const y = 5 + i * 0.55;
+      const seg = Level.segmentAt(y);
+      this._stamp(posts, pi++, seg.x0 + 0.45, 0.36, y, 1, 1, 1, 0);
+      this._stamp(posts, pi++, seg.x1 - 0.45, 0.36, y, 1, 1, 1, 0);
+    }
+    posts.count = pi;
+    const railMat = new THREE.MeshLambertMaterial({ color: 0x5a4030 });
+    const railL = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 26), railMat);
+    railL.position.set(Level.segmentAt(16).x0 + 0.45, 0.62, 18);
+    const railR = railL.clone();
+    railR.position.x = Level.segmentAt(16).x1 - 0.45;
+    scene.add(grass, flowers, bamboo, leaves, trunks, canopy, canopy2, rocks, posts, railL, railR);
+    grass.instanceMatrix.needsUpdate = flowers.instanceMatrix.needsUpdate = true;
+    bamboo.instanceMatrix.needsUpdate = leaves.instanceMatrix.needsUpdate = true;
+    trunks.instanceMatrix.needsUpdate = canopy.instanceMatrix.needsUpdate = canopy2.instanceMatrix.needsUpdate = true;
+    rocks.instanceMatrix.needsUpdate = posts.instanceMatrix.needsUpdate = true;
+
+    const homes = [[-5.5, 10, 0], [5.4, 16.5, 1], [-8.2, 33, 0], [8.4, 51, 1], [-8.0, 98, 0], [7.8, 112, 1], [-8.2, 147, 0], [5.2, 169, 1]];
+    for (let i = 0; i < homes.length; i++) this._machiya(homes[i][0], homes[i][1], homes[i][2]);
+    this._shrineWall(-3.4, 4.2, 2.6);
+    this._shrineWall(1.2, 4.2, 2.2);
+    this._shrineWall(-2.8, 171.2, 2.2);
+    this._shrineWall(1.4, 171.2, 2.4);
+    for (let i = 0; i < 14; i++) {
+      const p = this._verge(i + 900, 1.5);
+      if (Math.abs(p.x) < 2.2) continue;
+      const lan = this._lantern();
+      lan.position.set(p.x, 0, p.y);
+      scene.add(lan);
+    }
+    this._mist();
+    this._ambientPoints();
+  };
+
+  Renderer.prototype._machiya = function (x, z, flip) {
     const g = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.7, 1.7), mat(0x3e2a1c, { rough: 0.86, em: 0x140c08, emI: 0.2 }));
-    body.position.y = 0.85;
-    const roof = new THREE.Mesh(new THREE.ConeGeometry(1.85, 0.75, 4), mat(0x24160f, { flat: true }));
-    roof.position.y = 1.95;
-    roof.rotation.y = Math.PI / 4;
-    const win = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.55), mat(0xffe2b0, { em: 0xffb15a, emI: 2.6 }));
-    win.position.set(0.15, 0.95, 0.86);
-    const win2 = win.clone();
-    win2.position.x = -0.45;
-    const glow = halo(0xffb15a, 2.4);
-    glow.position.set(0, 1.0, 1.0);
-    g.add(body, roof, win, win2, glow);
+    const wood = mat(0x3a2416, { rough: 0.82 });
+    const plaster = mat(0xd9d2c6, { rough: 0.92, em: 0x2a261c, emI: 0.12 });
+    const tile = mat(0x1a222c, { flat: true });
+    const found = new THREE.Mesh(new THREE.BoxGeometry(3.3, 0.28, 2.5), mat(0x6a6458, { flat: true }));
+    found.position.y = 0.14;
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(3.05, 1.45, 2.15), plaster);
+    wall.position.y = 1.02;
+    const beam = new THREE.Mesh(new THREE.BoxGeometry(3.15, 0.12, 0.12), wood);
+    beam.position.set(0, 1.7, 1.05);
+    const postL = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.6, 0.12), wood);
+    postL.position.set(-1.45, 0.95, 1.05);
+    const postR = postL.clone();
+    postR.position.x = 1.45;
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(3.7, 0.14, 2.9), tile);
+    roof.position.y = 1.92;
+    const eave = new THREE.Mesh(new THREE.BoxGeometry(3.95, 0.08, 3.15), tile);
+    eave.position.y = 1.84;
+    const winMat = mat(0xffe2b0, { em: 0xffb15a, emI: 2.4 });
+    const win = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.62), winMat);
+    win.position.set(-0.55, 1.05, 1.09);
+    const win2 = new THREE.Mesh(new THREE.PlaneGeometry(0.36, 0.46), winMat);
+    win2.position.set(0.7, 1.15, 1.09);
+    const noren = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.45), mat(0x8e2430, { em: 0x401018, emI: 0.2, side: THREE.DoubleSide }));
+    noren.position.set(0.05, 0.7, 1.1);
+    const glow = halo(0xffb15a, 1.7);
+    glow.position.set(-0.2, 1.05, 1.2);
+    g.add(found, wall, beam, postL, postR, roof, eave, win, win2, noren, glow);
     g.position.set(x, 0, z);
+    if (flip) g.rotation.y = Math.PI;
     this.scene.add(g);
     this.lamps.push(win);
+    Level.solids.push({ x: x, y: z, r: 1.25 });
+  };
+
+  Renderer.prototype._shrineWall = function (x, z, len) {
+    const g = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.BoxGeometry(len, 0.72, 0.22), mat(0xe7e0d2, { em: 0x2a2418, emI: 0.08 }));
+    body.position.y = 0.36;
+    const cap = new THREE.Mesh(new THREE.BoxGeometry(len + 0.12, 0.1, 0.34), mat(0x2a2418));
+    cap.position.y = 0.76;
+    g.add(body, cap);
+    g.position.set(x, 0, z);
+    this.scene.add(g);
+  };
+
+  Renderer.prototype._mist = function () {
+    const c = document.createElement('canvas');
+    c.width = c.height = 64;
+    const g = c.getContext('2d');
+    const grd = g.createRadialGradient(32, 32, 4, 32, 32, 32);
+    grd.addColorStop(0, 'rgba(210,214,220,0.55)');
+    grd.addColorStop(1, 'rgba(210,214,220,0)');
+    g.fillStyle = grd;
+    g.fillRect(0, 0, 64, 64);
+    const tex = new THREE.CanvasTexture(c);
+    this.mist = [];
+    for (let i = 0; i < 10; i++) {
+      const p = this._verge(i + 1200, 3);
+      const s = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: tex, transparent: true, depthWrite: false, opacity: 0.16, color: 0xb7c0c8,
+      }));
+      s.position.set(p.x * 0.4, 0.7 + this._rand(i) * 0.8, p.y);
+      s.scale.set(7 + this._rand(i + 2) * 5, 2.2, 1);
+      s.userData.base = s.position.clone();
+      s.userData.ph = this._rand(i + 4) * 6;
+      this.scene.add(s);
+      this.mist.push(s);
+    }
+  };
+
+  Renderer.prototype._ambientPoints = function () {
+    const n = 170;
+    const pos = new Float32Array(n * 3);
+    this.flyBase = [];
+    for (let i = 0; i < n; i++) {
+      const p = this._verge(i + 1500, 3.2);
+      const y = 0.4 + this._rand(i + 8) * 1.6;
+      pos[i * 3] = p.x; pos[i * 3 + 1] = y; pos[i * 3 + 2] = p.y;
+      this.flyBase.push({ x: p.x, y: y, z: p.y, ph: this._rand(i) * 6, s: 0.6 + this._rand(i + 1), r: 0.35 + this._rand(i + 2) * 0.5 });
+    }
+    const geo = new THREE.BufferGeometry();
+    this.flyAttr = new THREE.BufferAttribute(pos, 3);
+    geo.setAttribute('position', this.flyAttr);
+    this.scene.add(new THREE.Points(geo, new THREE.PointsMaterial({
+      color: 0xc6ffb0, size: 0.09, transparent: true, opacity: 0.9, sizeAttenuation: true, depthWrite: false,
+    })));
+    const en = 90;
+    const ep = new Float32Array(en * 3);
+    this.emberBase = [];
+    for (let i = 0; i < en; i++) {
+      const p = this._verge(i + 1800, 2);
+      ep[i * 3] = p.x; ep[i * 3 + 1] = 0.3; ep[i * 3 + 2] = p.y;
+      this.emberBase.push({ x: p.x, z: p.y, ph: this._rand(i + 6) * 5 });
+    }
+    const eg = new THREE.BufferGeometry();
+    this.emberAttr = new THREE.BufferAttribute(ep, 3);
+    eg.setAttribute('position', this.emberAttr);
+    this.scene.add(new THREE.Points(eg, new THREE.PointsMaterial({
+      color: 0xffaa55, size: 0.055, transparent: true, opacity: 0.75, sizeAttenuation: true, depthWrite: false,
+    })));
   };
 
   Renderer.prototype._buildLights = function () {
@@ -1161,6 +1382,35 @@
       f.position.x = b.x + Math.sin(this.time * 0.7 + f.userData.ph) * 0.6;
       f.position.y = b.y + Math.sin(this.time * 1.7 + f.userData.ph) * 0.25;
       f.position.z = b.z + Math.cos(this.time * 0.5 + f.userData.ph) * 0.6;
+    }
+    if (this.flyAttr) {
+      const arr = this.flyAttr.array;
+      for (let i = 0; i < this.flyBase.length; i++) {
+        const b = this.flyBase[i];
+        arr[i * 3] = b.x + Math.sin(this.time * b.s + b.ph) * b.r;
+        arr[i * 3 + 1] = b.y + Math.sin(this.time * 1.5 + b.ph) * 0.22;
+        arr[i * 3 + 2] = b.z + Math.cos(this.time * 0.55 + b.ph) * b.r;
+      }
+      this.flyAttr.needsUpdate = true;
+    }
+    if (this.emberAttr) {
+      const arr = this.emberAttr.array;
+      for (let i = 0; i < this.emberBase.length; i++) {
+        const b = this.emberBase[i];
+        const t = (this.time * 0.35 + b.ph) % 1;
+        arr[i * 3] = b.x + Math.sin(b.ph + t * 4) * 0.15;
+        arr[i * 3 + 1] = 0.15 + t * 1.5;
+        arr[i * 3 + 2] = b.z;
+      }
+      this.emberAttr.needsUpdate = true;
+    }
+    if (this.mist) {
+      for (let i = 0; i < this.mist.length; i++) {
+        const m = this.mist[i];
+        const b = m.userData.base;
+        m.position.x = b.x + Math.sin(this.time * 0.15 + m.userData.ph) * 0.8;
+        m.position.z = b.z + this.time * 0.15;
+      }
     }
     if (this.waterMap) this.waterMap.offset.y = this.time * 0.05;
 
