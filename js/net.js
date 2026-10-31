@@ -15,6 +15,32 @@
     return 'yokai-road-' + String(code).toLowerCase();
   }
 
+  /* Google STUN first, then TURN relays for strict NATs.
+     Open Relay's static account is included as requested. A second public relay
+     (turn.evan-brass.net, guest/password) is the one that currently returns
+     relay candidates when Open Relay does not. */
+  const OPEN_RELAY = { username: 'openrelayproject', credential: 'openrelayproject' };
+  const EVAN_RELAY = { username: 'guest', credential: 'password' };
+
+  function iceServers() {
+    return [
+      { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
+      { urls: 'stun:stun.cloudflare.com:3478' },
+      { urls: 'stun:openrelay.metered.ca:80' },
+      Object.assign({ urls: [
+        'turn:openrelay.metered.ca:80',
+        'turn:openrelay.metered.ca:80?transport=tcp',
+        'turn:openrelay.metered.ca:443',
+        'turn:openrelay.metered.ca:443?transport=tcp',
+      ] }, OPEN_RELAY),
+      Object.assign({ urls: [
+        'turn:turn.evan-brass.net:3478',
+        'turn:turn.evan-brass.net:3478?transport=tcp',
+        'turns:turn.evan-brass.net:443?transport=tcp',
+      ] }, EVAN_RELAY),
+    ];
+  }
+
   function opts() {
     const q = new URLSearchParams(location.search);
     const o = { debug: +(q.get('peerdebug') || 0) };
@@ -24,12 +50,9 @@
       o.path = q.get('peerpath') || '/';
       o.secure = q.get('peersecure') === '1';
     }
-    o.config = {
-      iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun.cloudflare.com:3478' },
-      ],
-    };
+    const relay = q.get('relay') === '1' || q.get('ice') === 'relay';
+    o.config = { iceServers: iceServers() };
+    if (relay) o.config.iceTransportPolicy = 'relay';
     return o;
   }
 
@@ -48,6 +71,9 @@
     onLink: null,
     onDrop: null,
     seqIn: 0,
+    iceSeen: [],
+    iceSelected: null,
+    joinTries: 0,
     host: function () { return this.role === 'host'; },
     guest: function () { return this.role === 'guest'; },
     linked: function () { return !!(this.conn && this.conn.open); },
@@ -100,6 +126,59 @@
         try { self.peer.reconnect(); } catch (e) {}
       });
     },
+    joinLimit: function () {
+      const q = new URLSearchParams(location.search);
+      return { ms: +(q.get('jointimeout') || 35000), tries: +(q.get('jointries') || 2) };
+    },
+    failJoin: function (message) {
+      clearTimeout(this.jt);
+      const cb = this.joinCb;
+      this.joinCb = null;
+      this.leave();
+      this.err = this.status = message;
+      if (cb) cb(message);
+    },
+    armJoinTimer: function () {
+      const self = this;
+      const lim = this.joinLimit();
+      clearTimeout(this.jt);
+      this.jt = setTimeout(function () {
+        if (!self.joinCb) return;
+        if (self.joinTries < lim.tries) {
+          self.status = 'STILL LINKING — TRYING THE RELAY';
+          self.retryJoin();
+          return;
+        }
+        self.failJoin('CONNECTION FAILED — TRY ANOTHER NETWORK');
+      }, lim.ms);
+    },
+    retryJoin: function () {
+      try { if (this.conn) this.conn.close(); } catch (e) {}
+      try { if (this.peer) this.peer.destroy(); } catch (e) {}
+      this.conn = null;
+      this.peer = null;
+      this.joinTries += 1;
+      this.status = 'STILL LINKING — TRYING THE RELAY (' + this.joinTries + ')';
+      this.openGuestPeer();
+      this.armJoinTimer();
+    },
+    openGuestPeer: function () {
+      const self = this;
+      this.peer = new Peer(undefined, opts());
+      this.peer.on('open', function () {
+        self.bind(self.peer.connect(pid(self.code), { reliable: true, serialization: 'json' }));
+      });
+      this.peer.on('error', function (e) {
+        const missing = e && e.type === 'peer-unavailable';
+        const m = missing ? 'NO ROAD WITH THAT CODE' : String((e && e.type) || e).toUpperCase();
+        if (!missing && self.joinCb && self.joinTries < self.joinLimit().tries) {
+          self.status = 'LINK HITCH — ' + m;
+          self.retryJoin();
+          return;
+        }
+        self.failJoin(m);
+      });
+    },
     startJoin: function (code, cb) {
       if (typeof Peer === 'undefined') {
         cb && cb('PEERJS MISSING');
@@ -109,36 +188,66 @@
       this.code = String(code || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
       this.status = 'SEEKING ' + this.code;
       this.joinCb = cb;
+      this.joinTries = 1;
+      this.iceSeen = [];
+      this.iceSelected = null;
+      this.openGuestPeer();
+      this.armJoinTimer();
+    },
+    watchIce: function (c) {
       const self = this;
-      clearTimeout(this.jt);
-      this.jt = setTimeout(function () {
-        if (self.joinCb) {
-          const c = self.joinCb;
-          self.joinCb = null;
-          self.leave();
-          self.err = self.status = 'CONNECTION FAILED';
-          c('CONNECTION FAILED — TRY ANOTHER NETWORK');
-        }
-      }, +(new URLSearchParams(location.search).get('jointimeout') || 15000));
-      this.peer = new Peer(undefined, opts());
-      this.peer.on('open', function () {
-        self.bind(self.peer.connect(pid(self.code), { reliable: true, serialization: 'json' }));
+      const attach = function () {
+        const pc = c.peerConnection;
+        if (!pc || pc.__yokaiIce) return;
+        pc.__yokaiIce = 1;
+        pc.addEventListener('icecandidate', function (ev) {
+          const cand = ev.candidate;
+          if (!cand) return;
+          self.iceSeen.push({
+            type: cand.type || '',
+            protocol: cand.protocol || '',
+            url: cand.url || '',
+            address: cand.address || '',
+          });
+        });
+      };
+      attach();
+      let ticks = 0;
+      const timer = setInterval(function () {
+        attach();
+        if (++ticks > 40) clearInterval(timer);
+      }, 300);
+      c.on('open', function () {
+        clearInterval(timer);
+        attach();
+        setTimeout(function () { self.captureSelected(c); }, 500);
       });
-      this.peer.on('error', function (e) {
-        const m = e && e.type === 'peer-unavailable' ? 'NO ROAD WITH THAT CODE' : String((e && e.type) || e).toUpperCase();
-        self.err = self.status = m;
-        if (self.joinCb) {
-          const c = self.joinCb;
-          self.joinCb = null;
-          clearTimeout(self.jt);
-          self.leave();
-          c(m);
-        }
-      });
+      c.on('close', function () { clearInterval(timer); });
+    },
+    captureSelected: function (c) {
+      const pc = c && c.peerConnection;
+      const self = this;
+      if (!pc || !pc.getStats) return;
+      pc.getStats().then(function (stats) {
+        let pair = null;
+        stats.forEach(function (r) {
+          if (r.type === 'transport' && r.selectedCandidatePairId) pair = stats.get(r.selectedCandidatePairId) || pair;
+          if (r.type === 'candidate-pair' && r.selected) pair = r;
+        });
+        if (!pair) return;
+        const local = stats.get(pair.localCandidateId);
+        const remote = stats.get(pair.remoteCandidateId);
+        const brief = function (cand) {
+          if (!cand) return null;
+          return { type: cand.candidateType || cand.type || '', protocol: cand.protocol || '', url: cand.url || '', address: cand.address || '' };
+        };
+        self.iceSelected = { state: pair.state || '', local: brief(local), remote: brief(remote) };
+      }).catch(function () {});
     },
     bind: function (c) {
       const self = this;
       this.conn = c;
+      this.watchIce(c);
       c.on('open', function () {
         self.last = performance.now();
         clearTimeout(self.jt);

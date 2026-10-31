@@ -500,6 +500,13 @@
     get role() { return mode; },
     get code() { return Net.code; },
     get linked() { return Net.linked(); },
+    get ice() {
+      return {
+        seen: Net.iceSeen || [],
+        selected: Net.iceSelected || null,
+        relay: !!(new URLSearchParams(location.search).get('relay') === '1' || new URLSearchParams(location.search).get('ice') === 'relay'),
+      };
+    },
     get status() { return Net.status || ''; },
     get error() { return Net.err || bootError; },
     get playing() { return inGame; },
